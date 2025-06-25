@@ -275,9 +275,9 @@
         </div>
         
         <div class="controls">
-            <button class="btn btn-origin" onclick="toggleOriginMode()" id="originBtn">🎯 原点を設定</button>
-            <button class="btn btn-marker-add" onclick="toggleAddMode()">📍 マーカーを追加</button>
-            <button class="btn btn-marker-clear" onclick="clearMarkers()">🗑️ マーカーをクリア</button>
+            <button class="btn btn-origin" type="button" id="originBtn">🎯 原点を設定</button>
+            <button class="btn btn-marker-add" type="button">📍 マーカーを追加</button>
+            <button class="btn btn-marker-clear" type="button">🗑️ マーカーをクリア</button>
         </div>
         
         <div class="map-container" id="mapContainer">
@@ -895,6 +895,9 @@
       window.addEventListener('DOMContentLoaded', () => {
           init();
           renderAllMarkers();
+          document.getElementById('originBtn').addEventListener('click', toggleOriginMode);
+          document.querySelector('.btn-marker-add').addEventListener('click', toggleAddMode);
+          document.querySelector('.btn-marker-clear').addEventListener('click', clearMarkers);
       });
 
       // マップ画像アップロード

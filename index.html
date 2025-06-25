@@ -264,9 +264,18 @@
         </div>
         -->
         
-        <div style="margin-bottom: 18px; display: flex; align-items: center; gap: 10px;">
+        <!-- 編集パスワードUI -->
+        <div id="editPasswordArea" style="margin-bottom:18px;display:flex;align-items:center;gap:10px;">
+            <input type="password" id="editPasswordInput" placeholder="編集パスワード" style="padding:6px 12px;border-radius:5px;border:1px solid #888;font-size:15px;">
+            <button class="btn" id="editModeBtn">編集モードに入る</button>
+            <span id="editModeStatus" style="color:#4CAF50;font-weight:bold;margin-left:10px;display:none;">編集モード中</span>
+            <button class="btn" id="exitEditModeBtn" style="display:none;background:#ff4444;">編集モード終了</button>
+        </div>
+        
+        <div style="margin-bottom: 18px; display: flex; align-items: center; gap: 10px;" id="mapSettingsArea">
             <label style="color:#fff;">マップ枚数: </label>
-            <input type="number" id="mapCols" value="3" min="1" max="10" style="width:48px;"> ×
+            <input type="number" id="mapCols" value="3" min="1" max="10" style="width:48px;">
+            ×
             <input type="number" id="mapRows" value="3" min="1" max="10" style="width:48px;">
             <button class="btn" onclick="applyMapGrid()">設定</button>
             <label for="mapImageUpload" class="btn" style="margin-left:10px;cursor:pointer;background:#256029;">upload マップ
@@ -274,7 +283,7 @@
             </label>
         </div>
         
-        <div class="controls">
+        <div class="controls" id="editControlsArea">
             <button class="btn btn-origin" type="button" id="originBtn">🎯 原点を設定</button>
             <button class="btn btn-marker-add" type="button">📍 マーカーを追加</button>
             <button class="btn btn-marker-clear" type="button">🗑️ マーカーをクリア</button>
@@ -705,6 +714,18 @@
           // アクティブマーカーの表示
           markers.forEach(m => m.classList.remove('active'));
           marker.classList.add('active');
+          // 編集・削除ボタンの有効/無効
+          setTimeout(() => {
+            const editBtn = document.getElementById('editMarkerBtn');
+            const delBtn = document.getElementById('deleteMarkerBtn');
+            if (!isEditMode) {
+              if (editBtn) editBtn.disabled = true;
+              if (delBtn) delBtn.disabled = true;
+            } else {
+              if (editBtn) editBtn.disabled = false;
+              if (delBtn) delBtn.disabled = false;
+            }
+          }, 0);
       }
       
       function closeModal() {
@@ -940,6 +961,78 @@
       window.loadMarkersFromFirebase = loadMarkersFromFirebase;
       window.updateMarkerInFirebase = updateMarkerInFirebase;
       window.renderAllMarkers = renderAllMarkers;
+
+      // 編集モード管理
+      const EDIT_PASSWORD = 'creeper is fine'; // ←ここを好きなパスワードに変更
+      let isEditMode = false;
+      function setEditMode(flag) {
+        isEditMode = flag;
+        // 編集系UIの表示/非表示
+        document.getElementById('mapSettingsArea').style.display = flag ? '' : 'none';
+        document.getElementById('editControlsArea').style.display = flag ? '' : 'none';
+        // 編集モード状態表示
+        document.getElementById('editModeStatus').style.display = flag ? '' : 'none';
+        document.getElementById('exitEditModeBtn').style.display = flag ? '' : 'none';
+        document.getElementById('editPasswordInput').disabled = flag;
+        document.getElementById('editModeBtn').style.display = flag ? 'none' : '';
+      }
+      // 編集モード切り替え
+      document.addEventListener('DOMContentLoaded', () => {
+        setEditMode(false); // 初期は編集モードOFF
+        document.getElementById('editModeBtn').onclick = function() {
+          const input = document.getElementById('editPasswordInput').value;
+          if (input === EDIT_PASSWORD) {
+            setEditMode(true);
+          } else {
+            alert('パスワードが違います');
+          }
+        };
+        document.getElementById('exitEditModeBtn').onclick = function() {
+          setEditMode(false);
+        };
+      });
+      // 編集モードでない場合、編集系ダイアログやボタンを無効化
+      function requireEditMode() {
+        if (!isEditMode) {
+          alert('編集モードでのみ利用できます');
+          return false;
+        }
+        return true;
+      }
+      // 編集系ボタンのガード
+      document.addEventListener('DOMContentLoaded', () => {
+        // マップ分割数設定
+        document.querySelector('#mapSettingsArea button.btn').onclick = function(e) {
+          if (!requireEditMode()) return;
+          applyMapGrid();
+        };
+        // マップ画像アップロード
+        document.getElementById('mapImageUpload').onchange = function(e) {
+          if (!requireEditMode()) return;
+          if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+              mapImage.src = ev.target.result;
+            };
+            reader.readAsDataURL(e.target.files[0]);
+          }
+        };
+        // 原点設定
+        document.getElementById('originBtn').onclick = function(e) {
+          if (!requireEditMode()) return;
+          toggleOriginMode();
+        };
+        // マーカー追加
+        document.querySelector('.btn-marker-add').onclick = function(e) {
+          if (!requireEditMode()) return;
+          toggleAddMode();
+        };
+        // マーカークリア
+        document.querySelector('.btn-marker-clear').onclick = function(e) {
+          if (!requireEditMode()) return;
+          clearMarkers();
+        };
+      });
     </script>
 </body>
 </html>

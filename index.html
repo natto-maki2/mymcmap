@@ -309,7 +309,7 @@
 
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-      import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+      import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, serverTimestamp, query, orderBy, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
       import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-storage.js";
 
       // Firebase設定
@@ -426,10 +426,18 @@
       document.getElementById('mapCols').value = mapCols;
       document.getElementById('mapRows').value = mapRows;
 
-      // 原点をlocalStorageから復元
-      if (localStorage.getItem('originPxX')) {
-          originPxX = parseFloat(localStorage.getItem('originPxX'));
-          originPxY = parseFloat(localStorage.getItem('originPxY'));
+      // 原点をFirestoreに保存
+      async function saveOriginToFirestore(x, y) {
+        await setDoc(doc(db, 'settings', 'origin'), { originPxX: x, originPxY: y });
+      }
+      // Firestoreから原点を取得
+      async function loadOriginFromFirestore() {
+        const docSnap = await getDoc(doc(db, 'settings', 'origin'));
+        if (docSnap.exists()) {
+          return docSnap.data();
+        } else {
+          return null;
+        }
       }
 
       // デモ用のマーカーデータ
@@ -441,21 +449,18 @@
       // 初期化
       function init() {
           // デモマーカーなし
-          
           // マップ分割数UI初期化
           document.getElementById('mapCols').value = mapCols;
           document.getElementById('mapRows').value = mapRows;
-          
           // マップクリックイベント
-          mapContainer.addEventListener('click', function(e) {
+          mapContainer.addEventListener('click', async function(e) {
               const rect = mapContainer.getBoundingClientRect();
               const x = e.clientX - rect.left;
               const y = e.clientY - rect.top;
               if (originMode) {
                   originPxX = x;
                   originPxY = y;
-                  localStorage.setItem('originPxX', originPxX);
-                  localStorage.setItem('originPxY', originPxY);
+                  await saveOriginToFirestore(originPxX, originPxY);
                   alert(`原点を設定しました: (${originPxX.toFixed(1)}, ${originPxY.toFixed(1)})`);
                   toggleOriginMode();
                   return;
@@ -892,7 +897,13 @@
       }
       
       // 初期化とマーカー描画をDOMContentLoadedで実行
-      window.addEventListener('DOMContentLoaded', () => {
+      window.addEventListener('DOMContentLoaded', async () => {
+          // Firestoreから原点を取得してセット
+          const origin = await loadOriginFromFirestore();
+          if (origin) {
+              originPxX = origin.originPxX;
+              originPxY = origin.originPxY;
+          }
           init();
           renderAllMarkers();
           document.getElementById('originBtn').addEventListener('click', toggleOriginMode);

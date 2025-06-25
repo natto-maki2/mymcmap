@@ -394,6 +394,7 @@
         // 既存マーカーを全削除
         document.querySelectorAll('.marker').forEach(m => m.remove());
         const markers = await loadMarkersFromFirebase();
+        console.log('markers:', markers);
         markers.forEach(markerObj => {
           addMarkerCustom(
             markerObj.x, markerObj.y, markerObj.z,

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Minecraft Map</title>
+    <link rel="icon" type="image/png" href="creeper.png">
     <style>
         body {
             margin: 0;
@@ -238,6 +239,10 @@
         }
         .btn-origin:hover, .btn-marker-add:hover, .btn-marker-clear:hover {
             background: #45a049 !important;
+        }
+        .btn-addmode-active {
+            background: #ff4444 !important;
+            color: #fff !important;
         }
     </style>
 </head>
@@ -598,11 +603,11 @@
             const btn = event.target;
             if (addMode) {
                 btn.textContent = '❌ 追加モードを終了';
-                btn.style.background = '#ff4444';
+                btn.classList.add('btn-addmode-active');
                 mapContainer.style.cursor = 'crosshair';
             } else {
                 btn.textContent = '📍 マーカーを追加';
-                btn.style.background = '#4CAF50';
+                btn.classList.remove('btn-addmode-active');
                 mapContainer.style.cursor = 'default';
             }
         }

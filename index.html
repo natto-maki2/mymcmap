@@ -307,516 +307,12 @@
         </div>
     </div>
 
-    <script>
-        let markers = [];
-        let addMode = false;
-        let originMode = false;
-        let mapContainer = document.getElementById('mapContainer');
-        let mapImage = document.getElementById('mapImage');
-        let originPxX = null;
-        let originPxY = null;
-        // マップ分割数
-        let mapCols = parseInt(localStorage.getItem('mapCols')) || 3;
-        let mapRows = parseInt(localStorage.getItem('mapRows')) || 3;
-        // 1枚のマップのブロック数
-        const mapBlockSize = 2048;
-        // 1ピクセル=16ブロック
-        const pxPerBlock = 1 / 16;
-        // 全体のブロック数
-        function getTotalBlocksX() { return mapCols * mapBlockSize; }
-        function getTotalBlocksY() { return mapRows * mapBlockSize; }
-        // マップ分割数UIに反映
-        document.getElementById('mapCols').value = mapCols;
-        document.getElementById('mapRows').value = mapRows;
-
-        // 原点をlocalStorageから復元
-        if (localStorage.getItem('originPxX')) {
-            originPxX = parseFloat(localStorage.getItem('originPxX'));
-            originPxY = parseFloat(localStorage.getItem('originPxY'));
-        }
-
-        // デモ用のマーカーデータ
-        const demoMarkers = [];
-        
-        // マーカーごとに一意のIDを付与
-        let markerIdSeq = 0;
-        
-        // 初期化
-        function init() {
-            // デモマーカーなし
-            
-            // マップ分割数UI初期化
-            document.getElementById('mapCols').value = mapCols;
-            document.getElementById('mapRows').value = mapRows;
-            
-            // マップクリックイベント
-            mapContainer.addEventListener('click', function(e) {
-                const rect = mapContainer.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                if (originMode) {
-                    originPxX = x;
-                    originPxY = y;
-                    localStorage.setItem('originPxX', originPxX);
-                    localStorage.setItem('originPxY', originPxY);
-                    alert(`原点を設定しました: (${originPxX.toFixed(1)}, ${originPxY.toFixed(1)})`);
-                    toggleOriginMode();
-                    return;
-                }
-                if (addMode) {
-                    const imgW = mapImage.clientWidth;
-                    const imgH = mapImage.clientHeight;
-                    if (originPxX === null || originPxY === null) {
-                        alert('まず原点を設定してください');
-                        return;
-                    }
-                    // 原点を基準にピクセル→マイクラ座標
-                    const mx0 = Math.round(((x - originPxX) / imgW) * getTotalBlocksX());
-                    const mz0 = Math.round(((y - originPxY) / imgH) * getTotalBlocksY());
-                    const my0 = 64;
-                    showAddMarkerDialog(mx0, my0, mz0, x, y);
-                }
-            });
-        }
-        
-        // マーカー追加用カスタムダイアログ
-        function showAddMarkerDialog(mx0, my0, mz0, pxX, pxY) {
-            // 色候補
-            const colors = ['#ff4444', '#44ff44', '#4444ff', '#ffff44', '#ff44ff', '#44ffff', '#ff8800', '#888888'];
-            // ダイアログHTML
-            const dialog = document.createElement('div');
-            dialog.style.position = 'fixed';
-            dialog.style.left = '0';
-            dialog.style.top = '0';
-            dialog.style.width = '100vw';
-            dialog.style.height = '100vh';
-            dialog.style.background = 'rgba(0,0,0,0.7)';
-            dialog.style.zIndex = '2000';
-            dialog.style.display = 'flex';
-            dialog.style.alignItems = 'center';
-            dialog.style.justifyContent = 'center';
-            dialog.innerHTML = `
-                <div style="background:#222;padding:24px 32px;border-radius:12px;min-width:320px;max-width:90vw;box-shadow:0 0 24px #000;position:relative;">
-                    <button id="closeAddMarker" style="position:absolute;top:8px;right:12px;font-size:20px;background:none;border:none;color:#fff;cursor:pointer;">&times;</button>
-                    <h2 style="color:#4CAF50;margin-top:0;">マーカー追加</h2>
-                    <label style="color:#fff;">座標 (x, y, z):<br>
-                        <input id="markerX" type="number" value="${mx0}" style="width:70px;"> ,
-                        <input id="markerY" type="number" value="${my0}" style="width:70px;"> ,
-                        <input id="markerZ" type="number" value="${mz0}" style="width:70px;">
-                    </label><br><br>
-                    <label style="color:#fff;">タイトル:<br>
-                        <input id="markerTitle" type="text" value="新しい場所" style="width:90%;">
-                    </label><br><br>
-                    <label style="color:#fff;">メモ:<br>
-                        <textarea id="markerMemo" rows="2" style="width:90%;resize:vertical;"></textarea>
-                    </label><br><br>
-                    <label style="color:#fff;">upload マップ:<br>
-                        <input id="markerImage" type="file" accept="image/*">
-                    </label><br><br>
-                    <label style="color:#fff;">マーカー色:<br>
-                        <div id="colorChoices" style="display:flex;gap:8px;margin-top:4px;">
-                            ${colors.map((c,i)=>`<div class="color-choice" data-color="${c}" style="width:28px;height:28px;border-radius:50%;background:${c};border:3px solid #fff;cursor:pointer;box-shadow:0 2px 8px #000;${i===0?'outline:2px solid #4CAF50;':''}"></div>`).join('')}
-                        </div>
-                    </label><br>
-                    <button id="addMarkerBtn" class="btn" style="margin-top:10px;">追加</button>
-                </div>
-            `;
-            document.body.appendChild(dialog);
-            let selectedColor = colors[0];
-            // 色選択
-            dialog.querySelectorAll('.color-choice').forEach(el => {
-                el.onclick = function() {
-                    dialog.querySelectorAll('.color-choice').forEach(e=>e.style.outline='none');
-                    this.style.outline = '2px solid #4CAF50';
-                    selectedColor = this.getAttribute('data-color');
-                };
-            });
-            // 閉じる
-            dialog.querySelector('#closeAddMarker').onclick = ()=>dialog.remove();
-            // 追加ボタン
-            dialog.querySelector('#addMarkerBtn').onclick = async function() {
-                const mx = parseInt(dialog.querySelector('#markerX').value);
-                const my = parseInt(dialog.querySelector('#markerY').value);
-                const mz = parseInt(dialog.querySelector('#markerZ').value);
-                const title = dialog.querySelector('#markerTitle').value;
-                const memo = dialog.querySelector('#markerMemo').value;
-                const fileInput = dialog.querySelector('#markerImage');
-                if (isNaN(mx) || isNaN(my) || isNaN(mz)) { alert('座標が正しくありません'); return; }
-                if (!title) { alert('タイトルを入力してください'); return; }
-                let imageFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
-                const markerData = { x: mx, y: my, z: mz, title, memo, color: selectedColor };
-                await window.saveMarkerToFirebase(markerData, imageFile);
-                dialog.remove();
-                window.renderAllMarkers();
-            };
-        }
-        
-        // カスタムマーカー追加
-        function addMarkerCustom(mx, my, mz, title, imageUrl, color, memo, firebaseId) {
-            const imgW = mapImage.clientWidth;
-            const imgH = mapImage.clientHeight;
-            if (originPxX === null || originPxY === null) return;
-            // マイクラ座標→ピクセル座標（原点基準）
-            const markerX = originPxX + (mx / getTotalBlocksX()) * imgW;
-            const markerY = originPxY + (mz / getTotalBlocksY()) * imgH;
-            const marker = document.createElement('div');
-            marker.className = 'marker';
-            marker.style.left = markerX + 'px';
-            marker.style.top = markerY + 'px';
-            marker.style.background = color;
-            marker.setAttribute('data-title', title);
-            marker.setAttribute('data-coordinates', JSON.stringify({x: mx, y: my, z: mz}));
-            marker.setAttribute('data-image', imageUrl);
-            marker.setAttribute('data-color', color);
-            marker.setAttribute('data-memo', memo || '');
-            marker.dataset.markerId = firebaseId || ('m' + (++markerIdSeq));
-            marker.addEventListener('click', function(e) {
-                if (!addMode && !originMode) {
-                    e.stopPropagation();
-                    toggleMarkerCard(this);
-                }
-            });
-            mapContainer.appendChild(marker);
-            markers.push(marker);
-        }
-        
-        // 複数カードのトグル表示
-        function toggleMarkerCard(marker) {
-            const markerId = marker.dataset.markerId;
-            const cardsContainer = document.getElementById('markerCards');
-            let cardDiv = document.getElementById('markerCard-' + markerId);
-            let lineSvg = document.getElementById('markerLine-' + markerId);
-            if (cardDiv) {
-                // 既に表示中→消す
-                cardDiv.remove();
-                if (lineSvg) lineSvg.remove();
-                marker.classList.remove('active');
-                return;
-            }
-            // 新規表示
-            const title = marker.getAttribute('data-title');
-            const coordinates = JSON.parse(marker.getAttribute('data-coordinates'));
-            const imageUrl = marker.getAttribute('data-image');
-            const color = marker.getAttribute('data-color') || '#ff4444';
-            const imgW = mapImage.clientWidth;
-            const imgH = mapImage.clientHeight;
-            // マーカーのピクセル位置
-            const mx = coordinates.x;
-            const mz = coordinates.z;
-            if (originPxX === null || originPxY === null) return;
-            const markerX = originPxX + (mx / getTotalBlocksX()) * imgW;
-            const markerY = originPxY + (mz / getTotalBlocksY()) * imgH;
-            // カードの表示位置（右上にオフセット、はみ出し防止）
-            const cardW = 200, cardH = 10, offset = 60;
-            let cardLeft = markerX + offset;
-            let cardTop = markerY - cardH/2;
-            if (cardLeft + cardW > imgW) cardLeft = markerX - cardW - offset;
-            if (cardTop < 0) cardTop = 0;
-            if (cardTop + cardH > imgH) cardTop = imgH - cardH;
-            // カード本体
-            cardDiv = document.createElement('div');
-            cardDiv.id = 'markerCard-' + markerId;
-            cardDiv.style.position = 'absolute';
-            cardDiv.style.left = cardLeft + 'px';
-            cardDiv.style.top = cardTop + 'px';
-            cardDiv.style.pointerEvents = 'auto';
-            cardDiv.innerHTML = `
-                <div style="background:#222;border-radius:10px;box-shadow:0 4px 16px #000;padding:14px 16px;width:${cardW}px;min-height:${cardH}px;display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;">
-                    <img src="${imageUrl}" style="max-width:220px;max-height:120px;border-radius:8px;box-shadow:0 2px 8px #000;margin-bottom:8px;">
-                    <div style="color:#fff;font-size:17px;font-weight:bold;text-align:center;line-height:1.2;">${title}</div>
-                </div>
-            `;
-            cardDiv.onclick = function(e) {
-                e.stopPropagation();
-                showModal(marker);
-            };
-            cardsContainer.appendChild(cardDiv);
-            // 線SVG
-            lineSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            lineSvg.setAttribute('id', 'markerLine-' + markerId);
-            lineSvg.setAttribute('style', 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:20;');
-            lineSvg.setAttribute('width', imgW);
-            lineSvg.setAttribute('height', imgH);
-            const lineStartX = cardLeft < markerX ? cardLeft + cardW : cardLeft;
-            const lineStartY = cardTop + cardH/2;
-            lineSvg.innerHTML = `<line x1="${lineStartX}" y1="${lineStartY}" x2="${markerX}" y2="${markerY}" stroke="${color}" stroke-width="3" />
-                <circle cx="${markerX}" cy="${markerY}" r="6" fill="${color}" />`;
-            cardsContainer.appendChild(lineSvg);
-            marker.classList.add('active');
-        }
-        
-        // 詳細モーダル（従来通り）
-        function showModal(marker) {
-            const title = marker.getAttribute('data-title');
-            const coordinates = JSON.parse(marker.getAttribute('data-coordinates'));
-            const imageUrl = marker.getAttribute('data-image');
-            const memo = marker.getAttribute('data-memo') || '';
-            const color = marker.getAttribute('data-color') || '#ff4444';
-            document.getElementById('modalTitle').textContent = title;
-            document.getElementById('modalCoordinates').textContent = 
-                `座標: X=${coordinates.x}, Y=${coordinates.y}, Z=${coordinates.z}`;
-            document.getElementById('modalImage').src = imageUrl;
-            // メモ表示
-            let memoElem = document.getElementById('modalMemo');
-            if (!memoElem) {
-                memoElem = document.createElement('div');
-                memoElem.id = 'modalMemo';
-                memoElem.style = 'margin: 12px 0; color: #fff; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; font-size: 15px; white-space: pre-wrap;';
-                document.querySelector('.modal-body').appendChild(memoElem);
-            }
-            memoElem.textContent = memo ? `メモ: ${memo}` : '';
-            // フッター生成・重複防止
-            let footer = document.getElementById('modalFooter');
-            if (footer) footer.remove();
-            footer = document.createElement('div');
-            footer.className = 'modal-footer';
-            footer.id = 'modalFooter';
-            footer.style.zIndex = 1100;
-            document.querySelector('.modal-content').appendChild(footer);
-            footer.innerHTML = `
-                <button class="btn-edit" id="editMarkerBtn">編集</button>
-                <button class="btn-danger" id="deleteMarkerBtn">削除</button>
-            `;
-            document.getElementById('deleteMarkerBtn').onclick = function() {
-                if (confirm('このマーカーを削除しますか？')) {
-                    marker.remove();
-                    closeModal();
-                }
-            };
-            document.getElementById('editMarkerBtn').onclick = function() {
-                showEditMarkerDialog(marker);
-            };
-            document.getElementById('imageModal').style.display = 'block';
-            // アクティブマーカーの表示
-            markers.forEach(m => m.classList.remove('active'));
-            marker.classList.add('active');
-        }
-        
-        function closeModal() {
-            document.getElementById('imageModal').style.display = 'none';
-            markers.forEach(m => m.classList.remove('active'));
-            hideAllMarkerCards();
-        }
-        
-        function toggleAddMode() {
-            addMode = !addMode;
-            const btn = event.target;
-            if (addMode) {
-                btn.textContent = '❌ 追加モードを終了';
-                btn.classList.add('btn-addmode-active');
-                mapContainer.style.cursor = 'crosshair';
-            } else {
-                btn.textContent = '📍 マーカーを追加';
-                btn.classList.remove('btn-addmode-active');
-                mapContainer.style.cursor = 'default';
-            }
-        }
-        
-        function clearMarkers() {
-            if (confirm('すべてのマーカーを削除しますか？')) {
-                markers.forEach(marker => marker.remove());
-                markers = [];
-            }
-        }
-        
-        function toggleOriginMode() {
-            originMode = !originMode;
-            const btn = document.getElementById('originBtn');
-            if (originMode) {
-                btn.textContent = '❌ 原点モード終了';
-                btn.style.background = '#ff4444';
-                mapContainer.style.cursor = 'crosshair';
-            } else {
-                btn.textContent = '🎯 原点を設定';
-                btn.style.background = '#4CAF50';
-                mapContainer.style.cursor = 'default';
-            }
-        }
-        
-        // モーダル外クリックで閉じる
-        window.onclick = function(event) {
-            const modal = document.getElementById('imageModal');
-            if (event.target === modal) {
-                closeModal();
-            }
-        }
-        
-        // ESCキーでモーダルを閉じる
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeModal();
-            }
-        });
-        
-        // 編集ダイアログ
-        function showEditMarkerDialog(marker) {
-            const title = marker.getAttribute('data-title');
-            const memo = marker.getAttribute('data-memo') || '';
-            const coordinates = JSON.parse(marker.getAttribute('data-coordinates'));
-            const imageUrl = marker.getAttribute('data-image');
-            const color = marker.getAttribute('data-color') || '#ff4444';
-            const colors = ['#ff4444', '#44ff44', '#4444ff', '#ffff44', '#ff44ff', '#44ffff', '#ff8800', '#888888'];
-            const dialog = document.createElement('div');
-            dialog.style.position = 'fixed';
-            dialog.style.left = '0';
-            dialog.style.top = '0';
-            dialog.style.width = '100vw';
-            dialog.style.height = '100vh';
-            dialog.style.background = 'rgba(0,0,0,0.7)';
-            dialog.style.zIndex = '3000';
-            dialog.style.display = 'flex';
-            dialog.style.alignItems = 'center';
-            dialog.style.justifyContent = 'center';
-            dialog.innerHTML = `
-                <div style="background:#222;padding:24px 32px;border-radius:12px;min-width:320px;max-width:90vw;box-shadow:0 0 24px #000;position:relative;">
-                    <button id="closeEditMarker" style="position:absolute;top:8px;right:12px;font-size:20px;background:none;border:none;color:#fff;cursor:pointer;">&times;</button>
-                    <h2 style="color:#4CAF50;margin-top:0;">マーカー編集</h2>
-                    <label style="color:#fff;">座標 (x, y, z):<br>
-                        <input id="editMarkerX" type="number" value="${coordinates.x}" style="width:70px;"> ,
-                        <input id="editMarkerY" type="number" value="${coordinates.y}" style="width:70px;"> ,
-                        <input id="editMarkerZ" type="number" value="${coordinates.z}" style="width:70px;">
-                    </label><br><br>
-                    <label style="color:#fff;">タイトル:<br>
-                        <input id="editMarkerTitle" type="text" value="${title}" style="width:90%;">
-                    </label><br><br>
-                    <label style="color:#fff;">メモ:<br>
-                        <textarea id="editMarkerMemo" rows="2" style="width:90%;resize:vertical;">${memo}</textarea>
-                    </label><br><br>
-                    <label style="color:#fff;">upload マップ:<br>
-                        <input id="editMarkerImage" type="file" accept="image/*">
-                    </label><br>
-                    <img id="editMarkerPreview" src="${imageUrl}" style="max-width:200px;max-height:120px;margin:10px 0;display:block;">
-                    <label style="color:#fff;">マーカー色:<br>
-                        <div id="editColorChoices" style="display:flex;gap:8px;margin-top:4px;">
-                            ${colors.map((c)=>`<div class=\"color-choice-edit\" data-color=\"${c}\" style=\"width:28px;height:28px;border-radius:50%;background:${c};border:3px solid #fff;cursor:pointer;box-shadow:0 2px 8px #000;${c===color?'outline:2px solid #4CAF50;':''}\"></div>`).join('')}
-                        </div>
-                    </label><br>
-                    <button id="saveEditMarkerBtn" class="btn" style="margin-top:10px;">保存</button>
-                </div>
-            `;
-            document.body.appendChild(dialog);
-            // 色選択
-            let selectedColor = color;
-            dialog.querySelectorAll('.color-choice-edit').forEach(el => {
-                el.onclick = function() {
-                    dialog.querySelectorAll('.color-choice-edit').forEach(e=>e.style.outline='none');
-                    this.style.outline = '2px solid #4CAF50';
-                    selectedColor = this.getAttribute('data-color');
-                };
-            });
-            // 画像プレビュー
-            dialog.querySelector('#editMarkerImage').onchange = function(e) {
-                if (e.target.files && e.target.files[0]) {
-                    const reader = new FileReader();
-                    reader.onload = function(ev) {
-                        dialog.querySelector('#editMarkerPreview').src = ev.target.result;
-                    };
-                    reader.readAsDataURL(e.target.files[0]);
-                }
-            };
-            dialog.querySelector('#closeEditMarker').onclick = ()=>dialog.remove();
-            dialog.querySelector('#saveEditMarkerBtn').onclick = async function() {
-                const newTitle = dialog.querySelector('#editMarkerTitle').value;
-                const newMemo = dialog.querySelector('#editMarkerMemo').value;
-                const newX = parseInt(dialog.querySelector('#editMarkerX').value);
-                const newY = parseInt(dialog.querySelector('#editMarkerY').value);
-                const newZ = parseInt(dialog.querySelector('#editMarkerZ').value);
-                const fileInput = dialog.querySelector('#editMarkerImage');
-                let imageFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
-                const markerId = marker.dataset.markerId;
-                const markerData = {
-                    x: newX, y: newY, z: newZ,
-                    title: newTitle,
-                    memo: newMemo,
-                    color: selectedColor,
-                    imageUrl: marker.getAttribute('data-image')
-                };
-                await window.updateMarkerInFirebase(markerId, markerData, imageFile);
-                dialog.remove();
-                closeModal();
-                window.renderAllMarkers();
-            };
-        }
-        
-        function toggleInfo() {
-            const ul = document.getElementById('infoList');
-            const icon = document.getElementById('infoToggleIcon');
-            if (ul.style.display === 'none') {
-                ul.style.display = '';
-                icon.textContent = '▼';
-            } else {
-                ul.style.display = 'none';
-                icon.textContent = '▼';
-            }
-        }
-        
-        // マップ分割数設定の反映
-        function applyMapGrid() {
-            const cols = parseInt(document.getElementById('mapCols').value);
-            const rows = parseInt(document.getElementById('mapRows').value);
-            if (isNaN(cols) || isNaN(rows) || cols < 1 || rows < 1) {
-                alert('マップ枚数は1以上の整数で指定してください');
-                return;
-            }
-            mapCols = cols;
-            mapRows = rows;
-            localStorage.setItem('mapCols', mapCols);
-            localStorage.setItem('mapRows', mapRows);
-            // 既存マーカーの再配置
-            updateAllMarkerPositions();
-        }
-        
-        // 既存マーカーの再配置
-        function updateAllMarkerPositions() {
-            const imgW = mapImage.clientWidth;
-            const imgH = mapImage.clientHeight;
-            markers.forEach(marker => {
-                const coordinates = JSON.parse(marker.getAttribute('data-coordinates'));
-                const mx = coordinates.x;
-                const mz = coordinates.z;
-                if (originPxX === null || originPxY === null) return;
-                const markerX = originPxX + (mx / getTotalBlocksX()) * imgW;
-                const markerY = originPxY + (mz / getTotalBlocksY()) * imgH;
-                marker.style.left = markerX + 'px';
-                marker.style.top = markerY + 'px';
-            });
-        }
-        
-        // カード/モーダル以外クリックで全カード非表示
-        mapContainer.addEventListener('click', function(e) {
-            if (e.target.classList.contains('marker')) return;
-            hideAllMarkerCards();
-        });
-
-        function hideAllMarkerCards() {
-            const cardsContainer = document.getElementById('markerCards');
-            cardsContainer.innerHTML = '';
-            markers.forEach(m => m.classList.remove('active'));
-        }
-        
-        // 初期化実行
-        init();
-        // Firebaseからマーカーを描画
-        window.renderAllMarkers();
-
-        // マップ画像アップロード
-        document.getElementById('mapImageUpload').addEventListener('change', function(e) {
-            if (e.target.files && e.target.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(ev) {
-                    mapImage.src = ev.target.result;
-                };
-                reader.readAsDataURL(e.target.files[0]);
-            }
-        });
-    </script>
-    <!-- Firebase SDK（モジュール用） -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
       import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
       import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-storage.js";
 
-      // あなたのFirebase設定
+      // Firebase設定
       const firebaseConfig = {
         apiKey: "AIzaSyBQPxpSrBaVBXMVnv9bZ_ts-be68xxSqmU",
         authDomain: "mymcmap-21477.firebaseapp.com",
@@ -899,14 +395,519 @@
         document.querySelectorAll('.marker').forEach(m => m.remove());
         const markers = await loadMarkersFromFirebase();
         markers.forEach(markerObj => {
-          window.addMarkerCustom(
+          addMarkerCustom(
             markerObj.x, markerObj.y, markerObj.z,
             markerObj.title, markerObj.imageUrl, markerObj.color, markerObj.memo, markerObj.id
           );
         });
       }
 
-      // windowに関数をエクスポート
+      // ここから下は元のアプリ本体のJS
+
+      let markers = [];
+      let addMode = false;
+      let originMode = false;
+      let mapContainer = document.getElementById('mapContainer');
+      let mapImage = document.getElementById('mapImage');
+      let originPxX = null;
+      let originPxY = null;
+      // マップ分割数
+      let mapCols = parseInt(localStorage.getItem('mapCols')) || 3;
+      let mapRows = parseInt(localStorage.getItem('mapRows')) || 3;
+      // 1枚のマップのブロック数
+      const mapBlockSize = 2048;
+      // 1ピクセル=16ブロック
+      const pxPerBlock = 1 / 16;
+      // 全体のブロック数
+      function getTotalBlocksX() { return mapCols * mapBlockSize; }
+      function getTotalBlocksY() { return mapRows * mapBlockSize; }
+      // マップ分割数UIに反映
+      document.getElementById('mapCols').value = mapCols;
+      document.getElementById('mapRows').value = mapRows;
+
+      // 原点をlocalStorageから復元
+      if (localStorage.getItem('originPxX')) {
+          originPxX = parseFloat(localStorage.getItem('originPxX'));
+          originPxY = parseFloat(localStorage.getItem('originPxY'));
+      }
+
+      // デモ用のマーカーデータ
+      const demoMarkers = [];
+      
+      // マーカーごとに一意のIDを付与
+      let markerIdSeq = 0;
+      
+      // 初期化
+      function init() {
+          // デモマーカーなし
+          
+          // マップ分割数UI初期化
+          document.getElementById('mapCols').value = mapCols;
+          document.getElementById('mapRows').value = mapRows;
+          
+          // マップクリックイベント
+          mapContainer.addEventListener('click', function(e) {
+              const rect = mapContainer.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+              if (originMode) {
+                  originPxX = x;
+                  originPxY = y;
+                  localStorage.setItem('originPxX', originPxX);
+                  localStorage.setItem('originPxY', originPxY);
+                  alert(`原点を設定しました: (${originPxX.toFixed(1)}, ${originPxY.toFixed(1)})`);
+                  toggleOriginMode();
+                  return;
+              }
+              if (addMode) {
+                  const imgW = mapImage.clientWidth;
+                  const imgH = mapImage.clientHeight;
+                  if (originPxX === null || originPxY === null) {
+                      alert('まず原点を設定してください');
+                      return;
+                  }
+                  // 原点を基準にピクセル→マイクラ座標
+                  const mx0 = Math.round(((x - originPxX) / imgW) * getTotalBlocksX());
+                  const mz0 = Math.round(((y - originPxY) / imgH) * getTotalBlocksY());
+                  const my0 = 64;
+                  showAddMarkerDialog(mx0, my0, mz0, x, y);
+              }
+          });
+      }
+      
+      // マーカー追加用カスタムダイアログ
+      function showAddMarkerDialog(mx0, my0, mz0, pxX, pxY) {
+          // 色候補
+          const colors = ['#ff4444', '#44ff44', '#4444ff', '#ffff44', '#ff44ff', '#44ffff', '#ff8800', '#888888'];
+          // ダイアログHTML
+          const dialog = document.createElement('div');
+          dialog.style.position = 'fixed';
+          dialog.style.left = '0';
+          dialog.style.top = '0';
+          dialog.style.width = '100vw';
+          dialog.style.height = '100vh';
+          dialog.style.background = 'rgba(0,0,0,0.7)';
+          dialog.style.zIndex = '2000';
+          dialog.style.display = 'flex';
+          dialog.style.alignItems = 'center';
+          dialog.style.justifyContent = 'center';
+          dialog.innerHTML = `
+              <div style="background:#222;padding:24px 32px;border-radius:12px;min-width:320px;max-width:90vw;box-shadow:0 0 24px #000;position:relative;">
+                  <button id="closeAddMarker" style="position:absolute;top:8px;right:12px;font-size:20px;background:none;border:none;color:#fff;cursor:pointer;">&times;</button>
+                  <h2 style="color:#4CAF50;margin-top:0;">マーカー追加</h2>
+                  <label style="color:#fff;">座標 (x, y, z):<br>
+                      <input id="markerX" type="number" value="${mx0}" style="width:70px;"> ,
+                      <input id="markerY" type="number" value="${my0}" style="width:70px;"> ,
+                      <input id="markerZ" type="number" value="${mz0}" style="width:70px;">
+                  </label><br><br>
+                  <label style="color:#fff;">タイトル:<br>
+                      <input id="markerTitle" type="text" value="新しい場所" style="width:90%;">
+                  </label><br><br>
+                  <label style="color:#fff;">メモ:<br>
+                      <textarea id="markerMemo" rows="2" style="width:90%;resize:vertical;"></textarea>
+                  </label><br><br>
+                  <label style="color:#fff;">upload マップ:<br>
+                      <input id="markerImage" type="file" accept="image/*">
+                  </label><br><br>
+                  <label style="color:#fff;">マーカー色:<br>
+                      <div id="colorChoices" style="display:flex;gap:8px;margin-top:4px;">
+                          ${colors.map((c,i)=>`<div class="color-choice" data-color="${c}" style="width:28px;height:28px;border-radius:50%;background:${c};border:3px solid #fff;cursor:pointer;box-shadow:0 2px 8px #000;${i===0?'outline:2px solid #4CAF50;':''}"></div>`).join('')}
+                      </div>
+                  </label><br>
+                  <button id="addMarkerBtn" class="btn" style="margin-top:10px;">追加</button>
+              </div>
+          `;
+          document.body.appendChild(dialog);
+          let selectedColor = colors[0];
+          // 色選択
+          dialog.querySelectorAll('.color-choice').forEach(el => {
+              el.onclick = function() {
+                  dialog.querySelectorAll('.color-choice').forEach(e=>e.style.outline='none');
+                  this.style.outline = '2px solid #4CAF50';
+                  selectedColor = this.getAttribute('data-color');
+              };
+          });
+          // 閉じる
+          dialog.querySelector('#closeAddMarker').onclick = ()=>dialog.remove();
+          // 追加ボタン
+          dialog.querySelector('#addMarkerBtn').onclick = async function() {
+              const mx = parseInt(dialog.querySelector('#markerX').value);
+              const my = parseInt(dialog.querySelector('#markerY').value);
+              const mz = parseInt(dialog.querySelector('#markerZ').value);
+              const title = dialog.querySelector('#markerTitle').value;
+              const memo = dialog.querySelector('#markerMemo').value;
+              const fileInput = dialog.querySelector('#markerImage');
+              if (isNaN(mx) || isNaN(my) || isNaN(mz)) { alert('座標が正しくありません'); return; }
+              if (!title) { alert('タイトルを入力してください'); return; }
+              let imageFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+              const markerData = { x: mx, y: my, z: mz, title, memo, color: selectedColor };
+              await window.saveMarkerToFirebase(markerData, imageFile);
+              dialog.remove();
+              window.renderAllMarkers();
+          };
+      }
+      
+      // カスタムマーカー追加
+      function addMarkerCustom(mx, my, mz, title, imageUrl, color, memo, firebaseId) {
+          const imgW = mapImage.clientWidth;
+          const imgH = mapImage.clientHeight;
+          if (originPxX === null || originPxY === null) return;
+          // マイクラ座標→ピクセル座標（原点基準）
+          const markerX = originPxX + (mx / getTotalBlocksX()) * imgW;
+          const markerY = originPxY + (mz / getTotalBlocksY()) * imgH;
+          const marker = document.createElement('div');
+          marker.className = 'marker';
+          marker.style.left = markerX + 'px';
+          marker.style.top = markerY + 'px';
+          marker.style.background = color;
+          marker.setAttribute('data-title', title);
+          marker.setAttribute('data-coordinates', JSON.stringify({x: mx, y: my, z: mz}));
+          marker.setAttribute('data-image', imageUrl);
+          marker.setAttribute('data-color', color);
+          marker.setAttribute('data-memo', memo || '');
+          marker.dataset.markerId = firebaseId || ('m' + (++markerIdSeq));
+          marker.addEventListener('click', function(e) {
+              if (!addMode && !originMode) {
+                  e.stopPropagation();
+                  toggleMarkerCard(this);
+              }
+          });
+          mapContainer.appendChild(marker);
+          markers.push(marker);
+      }
+      
+      // 複数カードのトグル表示
+      function toggleMarkerCard(marker) {
+          const markerId = marker.dataset.markerId;
+          const cardsContainer = document.getElementById('markerCards');
+          let cardDiv = document.getElementById('markerCard-' + markerId);
+          let lineSvg = document.getElementById('markerLine-' + markerId);
+          if (cardDiv) {
+              // 既に表示中→消す
+              cardDiv.remove();
+              if (lineSvg) lineSvg.remove();
+              marker.classList.remove('active');
+              return;
+          }
+          // 新規表示
+          const title = marker.getAttribute('data-title');
+          const coordinates = JSON.parse(marker.getAttribute('data-coordinates'));
+          const imageUrl = marker.getAttribute('data-image');
+          const color = marker.getAttribute('data-color') || '#ff4444';
+          const imgW = mapImage.clientWidth;
+          const imgH = mapImage.clientHeight;
+          // マーカーのピクセル位置
+          const mx = coordinates.x;
+          const mz = coordinates.z;
+          if (originPxX === null || originPxY === null) return;
+          const markerX = originPxX + (mx / getTotalBlocksX()) * imgW;
+          const markerY = originPxY + (mz / getTotalBlocksY()) * imgH;
+          // カードの表示位置（右上にオフセット、はみ出し防止）
+          const cardW = 200, cardH = 10, offset = 60;
+          let cardLeft = markerX + offset;
+          let cardTop = markerY - cardH/2;
+          if (cardLeft + cardW > imgW) cardLeft = markerX - cardW - offset;
+          if (cardTop < 0) cardTop = 0;
+          if (cardTop + cardH > imgH) cardTop = imgH - cardH;
+          // カード本体
+          cardDiv = document.createElement('div');
+          cardDiv.id = 'markerCard-' + markerId;
+          cardDiv.style.position = 'absolute';
+          cardDiv.style.left = cardLeft + 'px';
+          cardDiv.style.top = cardTop + 'px';
+          cardDiv.style.pointerEvents = 'auto';
+          cardDiv.innerHTML = `
+              <div style="background:#222;border-radius:10px;box-shadow:0 4px 16px #000;padding:14px 16px;width:${cardW}px;min-height:${cardH}px;display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;">
+                  <img src="${imageUrl}" style="max-width:220px;max-height:120px;border-radius:8px;box-shadow:0 2px 8px #000;margin-bottom:8px;">
+                  <div style="color:#fff;font-size:17px;font-weight:bold;text-align:center;line-height:1.2;">${title}</div>
+              </div>
+          `;
+          cardDiv.onclick = function(e) {
+              e.stopPropagation();
+              showModal(marker);
+          };
+          cardsContainer.appendChild(cardDiv);
+          // 線SVG
+          lineSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          lineSvg.setAttribute('id', 'markerLine-' + markerId);
+          lineSvg.setAttribute('style', 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:20;');
+          lineSvg.setAttribute('width', imgW);
+          lineSvg.setAttribute('height', imgH);
+          const lineStartX = cardLeft < markerX ? cardLeft + cardW : cardLeft;
+          const lineStartY = cardTop + cardH/2;
+          lineSvg.innerHTML = `<line x1="${lineStartX}" y1="${lineStartY}" x2="${markerX}" y2="${markerY}" stroke="${color}" stroke-width="3" />
+              <circle cx="${markerX}" cy="${markerY}" r="6" fill="${color}" />`;
+          cardsContainer.appendChild(lineSvg);
+          marker.classList.add('active');
+      }
+      
+      // 詳細モーダル（従来通り）
+      function showModal(marker) {
+          const title = marker.getAttribute('data-title');
+          const coordinates = JSON.parse(marker.getAttribute('data-coordinates'));
+          const imageUrl = marker.getAttribute('data-image');
+          const memo = marker.getAttribute('data-memo') || '';
+          const color = marker.getAttribute('data-color') || '#ff4444';
+          document.getElementById('modalTitle').textContent = title;
+          document.getElementById('modalCoordinates').textContent = 
+              `座標: X=${coordinates.x}, Y=${coordinates.y}, Z=${coordinates.z}`;
+          document.getElementById('modalImage').src = imageUrl;
+          // メモ表示
+          let memoElem = document.getElementById('modalMemo');
+          if (!memoElem) {
+              memoElem = document.createElement('div');
+              memoElem.id = 'modalMemo';
+              memoElem.style = 'margin: 12px 0; color: #fff; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; font-size: 15px; white-space: pre-wrap;';
+              document.querySelector('.modal-body').appendChild(memoElem);
+          }
+          memoElem.textContent = memo ? `メモ: ${memo}` : '';
+          // フッター生成・重複防止
+          let footer = document.getElementById('modalFooter');
+          if (footer) footer.remove();
+          footer = document.createElement('div');
+          footer.className = 'modal-footer';
+          footer.id = 'modalFooter';
+          footer.style.zIndex = 1100;
+          document.querySelector('.modal-content').appendChild(footer);
+          footer.innerHTML = `
+              <button class="btn-edit" id="editMarkerBtn">編集</button>
+              <button class="btn-danger" id="deleteMarkerBtn">削除</button>
+          `;
+          document.getElementById('deleteMarkerBtn').onclick = function() {
+              if (confirm('このマーカーを削除しますか？')) {
+                  marker.remove();
+                  closeModal();
+              }
+          };
+          document.getElementById('editMarkerBtn').onclick = function() {
+              showEditMarkerDialog(marker);
+          };
+          document.getElementById('imageModal').style.display = 'block';
+          // アクティブマーカーの表示
+          markers.forEach(m => m.classList.remove('active'));
+          marker.classList.add('active');
+      }
+      
+      function closeModal() {
+          document.getElementById('imageModal').style.display = 'none';
+          markers.forEach(m => m.classList.remove('active'));
+          hideAllMarkerCards();
+      }
+      
+      function toggleAddMode() {
+          addMode = !addMode;
+          const btn = event.target;
+          if (addMode) {
+              btn.textContent = '❌ 追加モードを終了';
+              btn.classList.add('btn-addmode-active');
+              mapContainer.style.cursor = 'crosshair';
+          } else {
+              btn.textContent = '📍 マーカーを追加';
+              btn.classList.remove('btn-addmode-active');
+              mapContainer.style.cursor = 'default';
+          }
+      }
+      
+      function clearMarkers() {
+          if (confirm('すべてのマーカーを削除しますか？')) {
+              markers.forEach(marker => marker.remove());
+              markers = [];
+          }
+      }
+      
+      function toggleOriginMode() {
+          originMode = !originMode;
+          const btn = document.getElementById('originBtn');
+          if (originMode) {
+              btn.textContent = '❌ 原点モード終了';
+              btn.style.background = '#ff4444';
+              mapContainer.style.cursor = 'crosshair';
+          } else {
+              btn.textContent = '🎯 原点を設定';
+              btn.style.background = '#4CAF50';
+              mapContainer.style.cursor = 'default';
+          }
+      }
+      
+      // モーダル外クリックで閉じる
+      window.onclick = function(event) {
+          const modal = document.getElementById('imageModal');
+          if (event.target === modal) {
+              closeModal();
+          }
+      }
+      
+      // ESCキーでモーダルを閉じる
+      document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape') {
+              closeModal();
+          }
+      });
+      
+      // 編集ダイアログ
+      function showEditMarkerDialog(marker) {
+          const title = marker.getAttribute('data-title');
+          const memo = marker.getAttribute('data-memo') || '';
+          const coordinates = JSON.parse(marker.getAttribute('data-coordinates'));
+          const imageUrl = marker.getAttribute('data-image');
+          const color = marker.getAttribute('data-color') || '#ff4444';
+          const colors = ['#ff4444', '#44ff44', '#4444ff', '#ffff44', '#ff44ff', '#44ffff', '#ff8800', '#888888'];
+          const dialog = document.createElement('div');
+          dialog.style.position = 'fixed';
+          dialog.style.left = '0';
+          dialog.style.top = '0';
+          dialog.style.width = '100vw';
+          dialog.style.height = '100vh';
+          dialog.style.background = 'rgba(0,0,0,0.7)';
+          dialog.style.zIndex = '3000';
+          dialog.style.display = 'flex';
+          dialog.style.alignItems = 'center';
+          dialog.style.justifyContent = 'center';
+          dialog.innerHTML = `
+              <div style="background:#222;padding:24px 32px;border-radius:12px;min-width:320px;max-width:90vw;box-shadow:0 0 24px #000;position:relative;">
+                  <button id="closeEditMarker" style="position:absolute;top:8px;right:12px;font-size:20px;background:none;border:none;color:#fff;cursor:pointer;">&times;</button>
+                  <h2 style="color:#4CAF50;margin-top:0;">マーカー編集</h2>
+                  <label style="color:#fff;">座標 (x, y, z):<br>
+                      <input id="editMarkerX" type="number" value="${coordinates.x}" style="width:70px;"> ,
+                      <input id="editMarkerY" type="number" value="${coordinates.y}" style="width:70px;"> ,
+                      <input id="editMarkerZ" type="number" value="${coordinates.z}" style="width:70px;">
+                  </label><br><br>
+                  <label style="color:#fff;">タイトル:<br>
+                      <input id="editMarkerTitle" type="text" value="${title}" style="width:90%;">
+                  </label><br><br>
+                  <label style="color:#fff;">メモ:<br>
+                      <textarea id="editMarkerMemo" rows="2" style="width:90%;resize:vertical;">${memo}</textarea>
+                  </label><br><br>
+                  <label style="color:#fff;">upload マップ:<br>
+                      <input id="editMarkerImage" type="file" accept="image/*">
+                  </label><br>
+                  <img id="editMarkerPreview" src="${imageUrl}" style="max-width:200px;max-height:120px;margin:10px 0;display:block;">
+                  <label style="color:#fff;">マーカー色:<br>
+                      <div id="editColorChoices" style="display:flex;gap:8px;margin-top:4px;">
+                          ${colors.map((c)=>`<div class=\"color-choice-edit\" data-color=\"${c}\" style=\"width:28px;height:28px;border-radius:50%;background:${c};border:3px solid #fff;cursor:pointer;box-shadow:0 2px 8px #000;${c===color?'outline:2px solid #4CAF50;':''}\"></div>`).join('')}
+                      </div>
+                  </label><br>
+                  <button id="saveEditMarkerBtn" class="btn" style="margin-top:10px;">保存</button>
+              </div>
+          `;
+          document.body.appendChild(dialog);
+          // 色選択
+          let selectedColor = color;
+          dialog.querySelectorAll('.color-choice-edit').forEach(el => {
+              el.onclick = function() {
+                  dialog.querySelectorAll('.color-choice-edit').forEach(e=>e.style.outline='none');
+                  this.style.outline = '2px solid #4CAF50';
+                  selectedColor = this.getAttribute('data-color');
+              };
+          });
+          // 画像プレビュー
+          dialog.querySelector('#editMarkerImage').onchange = function(e) {
+              if (e.target.files && e.target.files[0]) {
+                  const reader = new FileReader();
+                  reader.onload = function(ev) {
+                      dialog.querySelector('#editMarkerPreview').src = ev.target.result;
+                  };
+                  reader.readAsDataURL(e.target.files[0]);
+              }
+          };
+          dialog.querySelector('#closeEditMarker').onclick = ()=>dialog.remove();
+          dialog.querySelector('#saveEditMarkerBtn').onclick = async function() {
+              const newTitle = dialog.querySelector('#editMarkerTitle').value;
+              const newMemo = dialog.querySelector('#editMarkerMemo').value;
+              const newX = parseInt(dialog.querySelector('#editMarkerX').value);
+              const newY = parseInt(dialog.querySelector('#editMarkerY').value);
+              const newZ = parseInt(dialog.querySelector('#editMarkerZ').value);
+              const fileInput = dialog.querySelector('#editMarkerImage');
+              let imageFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+              const markerId = marker.dataset.markerId;
+              const markerData = {
+                  x: newX, y: newY, z: newZ,
+                  title: newTitle,
+                  memo: newMemo,
+                  color: selectedColor,
+                  imageUrl: marker.getAttribute('data-image')
+              };
+              await window.updateMarkerInFirebase(markerId, markerData, imageFile);
+              dialog.remove();
+              closeModal();
+              window.renderAllMarkers();
+          };
+      }
+      
+      function toggleInfo() {
+          const ul = document.getElementById('infoList');
+          const icon = document.getElementById('infoToggleIcon');
+          if (ul.style.display === 'none') {
+              ul.style.display = '';
+              icon.textContent = '▼';
+          } else {
+              ul.style.display = 'none';
+              icon.textContent = '▼';
+          }
+      }
+      
+      // マップ分割数設定の反映
+      function applyMapGrid() {
+          const cols = parseInt(document.getElementById('mapCols').value);
+          const rows = parseInt(document.getElementById('mapRows').value);
+          if (isNaN(cols) || isNaN(rows) || cols < 1 || rows < 1) {
+              alert('マップ枚数は1以上の整数で指定してください');
+              return;
+          }
+          mapCols = cols;
+          mapRows = rows;
+          localStorage.setItem('mapCols', mapCols);
+          localStorage.setItem('mapRows', mapRows);
+          // 既存マーカーの再配置
+          updateAllMarkerPositions();
+      }
+      
+      // 既存マーカーの再配置
+      function updateAllMarkerPositions() {
+          const imgW = mapImage.clientWidth;
+          const imgH = mapImage.clientHeight;
+          markers.forEach(marker => {
+              const coordinates = JSON.parse(marker.getAttribute('data-coordinates'));
+              const mx = coordinates.x;
+              const mz = coordinates.z;
+              if (originPxX === null || originPxY === null) return;
+              const markerX = originPxX + (mx / getTotalBlocksX()) * imgW;
+              const markerY = originPxY + (mz / getTotalBlocksY()) * imgH;
+              marker.style.left = markerX + 'px';
+              marker.style.top = markerY + 'px';
+          });
+      }
+      
+      // カード/モーダル以外クリックで全カード非表示
+      mapContainer.addEventListener('click', function(e) {
+          if (e.target.classList.contains('marker')) return;
+          hideAllMarkerCards();
+      });
+
+      function hideAllMarkerCards() {
+          const cardsContainer = document.getElementById('markerCards');
+          cardsContainer.innerHTML = '';
+          markers.forEach(m => m.classList.remove('active'));
+      }
+      
+      // 初期化とマーカー描画をDOMContentLoadedで実行
+      window.addEventListener('DOMContentLoaded', () => {
+          init();
+          renderAllMarkers();
+      });
+
+      // マップ画像アップロード
+      document.getElementById('mapImageUpload').addEventListener('change', function(e) {
+          if (e.target.files && e.target.files[0]) {
+              const reader = new FileReader();
+              reader.onload = function(ev) {
+                  mapImage.src = ev.target.result;
+              };
+              reader.readAsDataURL(e.target.files[0]);
+          }
+      });
+
+      // Firebase関数をwindowにエクスポート（編集・追加で使う）
       window.saveMarkerToFirebase = saveMarkerToFirebase;
       window.loadMarkersFromFirebase = loadMarkersFromFirebase;
       window.updateMarkerInFirebase = updateMarkerInFirebase;

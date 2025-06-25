@@ -428,10 +428,16 @@
 
       // 原点をFirestoreに保存
       async function saveOriginToFirestore(x, y) {
-        await setDoc(doc(db, 'settings', 'origin'), { originPxX: x, originPxY: y });
+        try {
+          await setDoc(doc(db, 'settings', 'origin'), { originPxX: x, originPxY: y });
+          console.log('Origin saved to Firestore:', x, y);
+        } catch (e) {
+          console.error('Firestore save error:', e);
+          throw e;
+        }
       }
       // Firestoreから原点を取得
-      async function loadOriginFromFirestore() {
+      async function loadOriginFromFirebase() {
         const docSnap = await getDoc(doc(db, 'settings', 'origin'));
         if (docSnap.exists()) {
           return docSnap.data();
@@ -460,9 +466,16 @@
               if (originMode) {
                   originPxX = x;
                   originPxY = y;
-                  await saveOriginToFirestore(originPxX, originPxY);
-                  alert(`原点を設定しました: (${originPxX.toFixed(1)}, ${originPxY.toFixed(1)})`);
-                  toggleOriginMode();
+                  console.log('Try to save origin:', originPxX, originPxY);
+                  saveOriginToFirestore(originPxX, originPxY)
+                    .then(() => {
+                      alert(`原点を設定しました: (${originPxX.toFixed(1)}, ${originPxY.toFixed(1)})`);
+                      toggleOriginMode();
+                    })
+                    .catch(e => {
+                      console.error('Failed to save origin:', e);
+                      alert('原点の保存に失敗しました');
+                    });
                   return;
               }
               if (addMode) {
@@ -899,7 +912,7 @@
       // 初期化とマーカー描画をDOMContentLoadedで実行
       window.addEventListener('DOMContentLoaded', async () => {
           // Firestoreから原点を取得してセット
-          const origin = await loadOriginFromFirestore();
+          const origin = await loadOriginFromFirebase();
           if (origin) {
               originPxX = origin.originPxX;
               originPxY = origin.originPxY;

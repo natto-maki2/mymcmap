@@ -429,7 +429,7 @@
             // 閉じる
             dialog.querySelector('#closeAddMarker').onclick = ()=>dialog.remove();
             // 追加ボタン
-            dialog.querySelector('#addMarkerBtn').onclick = function() {
+            dialog.querySelector('#addMarkerBtn').onclick = async function() {
                 const mx = parseInt(dialog.querySelector('#markerX').value);
                 const my = parseInt(dialog.querySelector('#markerY').value);
                 const mz = parseInt(dialog.querySelector('#markerZ').value);
@@ -438,26 +438,16 @@
                 const fileInput = dialog.querySelector('#markerImage');
                 if (isNaN(mx) || isNaN(my) || isNaN(mz)) { alert('座標が正しくありません'); return; }
                 if (!title) { alert('タイトルを入力してください'); return; }
-                // 画像処理
-                if (fileInput.files && fileInput.files[0]) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const imgUrl = e.target.result;
-                        addMarkerCustom(mx, my, mz, title, imgUrl, selectedColor, memo);
-                        dialog.remove();
-                    };
-                    reader.readAsDataURL(fileInput.files[0]);
-                } else {
-                    // デモ画像
-                    const demoImage = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjNDI5OTQyIi8+CiAgPHRleHQgeD0iMjAwIiB5PSIxNTAiIGZpbGw9IiNmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMThweCI+5paw44GX44GE5aC05omA44Gu5YaZ55yf</dGV4dD4KICA8dGV4dCB4PSIyMDAiIHk9IjE4MCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9Im1vbm9zcGFjZSIgZm9udC1zaXplPSIxNHB4Ij7lrp/pmpvjga7lgLvjgq/jg6rjg4Pjgq/jgafjgIE8L3RleHQ+CiAgPHRleHQgeD0iMjAwIiB5PSIyMDAiIGZpbGw9IiNmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMTRweCI+54++55yf44KS44Ki44OD44OX44Ot44O844OJ44Gn44GN44G+44GZPC90ZXh0Pgo8L3N2Zz4=";
-                    addMarkerCustom(mx, my, mz, title, demoImage, selectedColor, memo);
-                    dialog.remove();
-                }
+                let imageFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+                const markerData = { x: mx, y: my, z: mz, title, memo, color: selectedColor };
+                await window.saveMarkerToFirebase(markerData, imageFile);
+                dialog.remove();
+                window.renderAllMarkers();
             };
         }
         
         // カスタムマーカー追加
-        function addMarkerCustom(mx, my, mz, title, imageUrl, color, memo) {
+        function addMarkerCustom(mx, my, mz, title, imageUrl, color, memo, firebaseId) {
             const imgW = mapImage.clientWidth;
             const imgH = mapImage.clientHeight;
             if (originPxX === null || originPxY === null) return;
@@ -474,7 +464,7 @@
             marker.setAttribute('data-image', imageUrl);
             marker.setAttribute('data-color', color);
             marker.setAttribute('data-memo', memo || '');
-            marker.dataset.markerId = 'm' + (++markerIdSeq);
+            marker.dataset.markerId = firebaseId || ('m' + (++markerIdSeq));
             marker.addEventListener('click', function(e) {
                 if (!addMode && !originMode) {
                     e.stopPropagation();
@@ -720,43 +710,26 @@
                 }
             };
             dialog.querySelector('#closeEditMarker').onclick = ()=>dialog.remove();
-            dialog.querySelector('#saveEditMarkerBtn').onclick = function() {
+            dialog.querySelector('#saveEditMarkerBtn').onclick = async function() {
                 const newTitle = dialog.querySelector('#editMarkerTitle').value;
                 const newMemo = dialog.querySelector('#editMarkerMemo').value;
                 const newX = parseInt(dialog.querySelector('#editMarkerX').value);
                 const newY = parseInt(dialog.querySelector('#editMarkerY').value);
                 const newZ = parseInt(dialog.querySelector('#editMarkerZ').value);
-                let newImageUrl = dialog.querySelector('#editMarkerPreview').src;
-                // 画像アップロードがあればそれを使う
                 const fileInput = dialog.querySelector('#editMarkerImage');
-                if (fileInput.files && fileInput.files[0]) {
-                    const reader = new FileReader();
-                    reader.onload = function(ev) {
-                        newImageUrl = ev.target.result;
-                        updateMarker();
-                    };
-                    reader.readAsDataURL(fileInput.files[0]);
-                } else {
-                    updateMarker();
-                }
-                function updateMarker() {
-                    marker.setAttribute('data-title', newTitle);
-                    marker.setAttribute('data-memo', newMemo);
-                    marker.setAttribute('data-coordinates', JSON.stringify({x: newX, y: newY, z: newZ}));
-                    marker.setAttribute('data-image', newImageUrl);
-                    marker.setAttribute('data-color', selectedColor);
-                    marker.style.background = selectedColor;
-                    // ピクセル座標も更新
-                    const imgW = mapImage.clientWidth;
-                    const imgH = mapImage.clientHeight;
-                    if (originPxX === null || originPxY === null) return;
-                    const markerX = originPxX + (newX / getTotalBlocksX()) * imgW;
-                    const markerY = originPxY + (newZ / getTotalBlocksY()) * imgH;
-                    marker.style.left = markerX + 'px';
-                    marker.style.top = markerY + 'px';
-                    dialog.remove();
-                    closeModal();
-                }
+                let imageFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+                const markerId = marker.dataset.markerId;
+                const markerData = {
+                    x: newX, y: newY, z: newZ,
+                    title: newTitle,
+                    memo: newMemo,
+                    color: selectedColor,
+                    imageUrl: marker.getAttribute('data-image')
+                };
+                await window.updateMarkerInFirebase(markerId, markerData, imageFile);
+                dialog.remove();
+                closeModal();
+                window.renderAllMarkers();
             };
         }
         
@@ -818,6 +791,8 @@
         
         // 初期化実行
         init();
+        // Firebaseからマーカーを描画
+        window.renderAllMarkers();
 
         // マップ画像アップロード
         document.getElementById('mapImageUpload').addEventListener('change', function(e) {
@@ -829,6 +804,108 @@
                 reader.readAsDataURL(e.target.files[0]);
             }
         });
+    </script>
+    <!-- Firebase SDK（モジュール用） -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+      import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+      import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-storage.js";
+
+      // あなたのFirebase設定
+      const firebaseConfig = {
+        apiKey: "AIzaSyBQPxpSrBaVBXMVnv9bZ_ts-be68xxSqmU",
+        authDomain: "mymcmap-21477.firebaseapp.com",
+        projectId: "mymcmap-21477",
+        storageBucket: "mymcmap-21477.firebasestorage.app",
+        messagingSenderId: "540082815973",
+        appId: "1:540082815973:web:dde0c098afe328e8b9650c"
+      };
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const storage = getStorage(app);
+
+      // 画像圧縮関数
+      async function compressImage(file, maxWidth = 800, quality = 0.7) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          const reader = new FileReader();
+          reader.onload = (e) => { img.src = e.target.result; };
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(maxWidth / img.width, 1);
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(
+              (blob) => { resolve(blob); },
+              'image/jpeg',
+              quality
+            );
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // Firestoreにマーカー追加
+      async function saveMarkerToFirebase(markerData, imageFile) {
+        let imageUrl = '';
+        if (imageFile) {
+          const compressedBlob = await compressImage(imageFile, 800, 0.7);
+          const imgRef = storageRef(storage, 'markerImages/' + Date.now() + '_' + imageFile.name);
+          await uploadBytes(imgRef, compressedBlob);
+          imageUrl = await getDownloadURL(imgRef);
+        } else if (markerData.imageUrl) {
+          imageUrl = markerData.imageUrl;
+        }
+        const docRef = await addDoc(collection(db, 'markers'), {
+          ...markerData,
+          imageUrl,
+          createdAt: serverTimestamp()
+        });
+        return docRef.id;
+      }
+
+      // Firestoreからマーカー一覧取得
+      async function loadMarkersFromFirebase() {
+        const q = query(collection(db, 'markers'), orderBy('createdAt'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+
+      // Firestoreのマーカーを更新
+      async function updateMarkerInFirebase(id, markerData, imageFile) {
+        let imageUrl = markerData.imageUrl || '';
+        if (imageFile) {
+          const compressedBlob = await compressImage(imageFile, 800, 0.7);
+          const imgRef = storageRef(storage, 'markerImages/' + Date.now() + '_' + imageFile.name);
+          await uploadBytes(imgRef, compressedBlob);
+          imageUrl = await getDownloadURL(imgRef);
+        }
+        await updateDoc(doc(db, 'markers', id), {
+          ...markerData,
+          imageUrl
+        });
+      }
+
+      // Firestoreのマーカーを全てマップに表示
+      async function renderAllMarkers() {
+        // 既存マーカーを全削除
+        document.querySelectorAll('.marker').forEach(m => m.remove());
+        const markers = await loadMarkersFromFirebase();
+        markers.forEach(markerObj => {
+          window.addMarkerCustom(
+            markerObj.x, markerObj.y, markerObj.z,
+            markerObj.title, markerObj.imageUrl, markerObj.color, markerObj.memo, markerObj.id
+          );
+        });
+      }
+
+      // windowに関数をエクスポート
+      window.saveMarkerToFirebase = saveMarkerToFirebase;
+      window.loadMarkersFromFirebase = loadMarkersFromFirebase;
+      window.updateMarkerInFirebase = updateMarkerInFirebase;
+      window.renderAllMarkers = renderAllMarkers;
     </script>
 </body>
 </html>

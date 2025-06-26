@@ -308,7 +308,7 @@
         
         <div class="controls" id="editControlsArea">
             <button class="btn btn-origin" type="button" id="originBtn">🎯 原点を設定</button>
-            <button class="btn btn-marker-add" type="button">📍 マーカーを追加</button>
+            <button class="btn btn-marker-add" type="button" id="addMarkerBtn">📍 マーカーを追加</button>
             <button class="btn btn-marker-clear" type="button">🗑️ マーカーをクリア</button>
         </div>
         
@@ -757,7 +757,7 @@
           hideAllMarkerCards();
       }
       
-      function toggleAddMode() {
+      function toggleAddMode(event) {
           addMode = !addMode;
           const btn = event.target;
           if (addMode) {
@@ -964,8 +964,18 @@
           init();
           renderAllMarkers();
           document.getElementById('originBtn').addEventListener('click', toggleOriginMode);
-          document.querySelector('.btn-marker-add').addEventListener('click', toggleAddMode);
           document.querySelector('.btn-marker-clear').addEventListener('click', clearMarkers);
+          // マーカー追加（1回だけバインド）
+          const addMarkerBtn = document.getElementById('addMarkerBtn');
+          if (addMarkerBtn) {
+            addMarkerBtn.addEventListener('click', function(event) {
+              if (!requireEditMode()) return;
+              toggleAddMode(event);
+            });
+          }
+          // ウィンドウリサイズ時にマーカー再配置
+          window.addEventListener('resize', updateAllMarkerPositions);
+          mapImage.addEventListener('load', updateAllMarkerPositions);
       });
 
       // マップ画像アップロード
@@ -1075,11 +1085,6 @@
         document.getElementById('originBtn').onclick = function(e) {
           if (!requireEditMode()) return;
           toggleOriginMode();
-        };
-        // マーカー追加
-        document.querySelector('.btn-marker-add').onclick = function(e) {
-          if (!requireEditMode()) return;
-          toggleAddMode();
         };
         // マーカークリア
         document.querySelector('.btn-marker-clear').onclick = function(e) {

@@ -339,10 +339,18 @@
         </div>
     </div>
 
+    <!-- 右上に配置するためのスタイル例 -->
+    <div id="authArea" style="position:fixed;top:24px;right:32px;z-index:5000;">
+      <button id="loginBtn" class="btn" style="display:inline;">ログイン</button>
+      <button id="logoutBtn" style="display:none;">ログアウト</button>
+      <span id="userInfo" style="color:#fff;margin-left:8px;"></span>
+    </div>
+
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
       import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, serverTimestamp, query, orderBy, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
       import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-storage.js";
+      import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
 
       // Firebase設定
       const firebaseConfig = {
@@ -356,6 +364,8 @@
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
       const storage = getStorage(app);
+      const auth = getAuth();
+      const provider = new GoogleAuthProvider();
 
       // 画像圧縮関数
       async function compressImage(file, maxWidth = 800, quality = 0.7) {
@@ -1091,6 +1101,42 @@
           if (!requireEditMode()) return;
           clearMarkers();
         };
+      });
+
+      // ログインロジック
+      document.getElementById('loginBtn').onclick = async () => {
+        // シンプルにGoogle認証だけの場合
+        // await signInWithPopup(auth, provider);
+
+        // メール認証も使いたい場合は↓のような選択UIを作る
+        const method = prompt('Googleでログイン: 1\nメールアドレスでログイン: 2');
+        if (method === '1') {
+          await signInWithPopup(auth, provider);
+        } else if (method === '2') {
+          const email = prompt('メールアドレス:');
+          const pw = prompt('パスワード:');
+          try {
+            await signInWithEmailAndPassword(auth, email, pw);
+          } catch (e) {
+            alert('ログイン失敗: ' + e.message);
+          }
+        }
+      };
+
+      document.getElementById('logoutBtn').onclick = () => signOut(auth);
+
+      onAuthStateChanged(auth, user => {
+        if (user) {
+          document.getElementById('userInfo').textContent = user.displayName || user.email || 'ログイン中';
+          document.getElementById('loginBtn').style.display = 'none';
+          document.getElementById('logoutBtn').style.display = '';
+          // ここで編集UIを有効化してもOK
+        } else {
+          document.getElementById('userInfo').textContent = '';
+          document.getElementById('loginBtn').style.display = '';
+          document.getElementById('logoutBtn').style.display = 'none';
+          // ここで編集UIを無効化してもOK
+        }
       });
     </script>
 </body>

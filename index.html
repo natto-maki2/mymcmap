@@ -244,12 +244,32 @@
             background: #ff4444 !important;
             color: #fff !important;
         }
-        .switch { position: relative; display: inline-block; width: 48px; height: 28px; }
+        .switch { position: relative; display: inline-block; width: 60px; height: 32px; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 28px; }
-        .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow:0 2px 6px #0002; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 32px; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow:0 2px 6px #0002; }
         input:checked + .slider { background-color: #4CAF50; }
-        input:checked + .slider:before { transform: translateX(20px); }
+        input:checked + .slider:before { transform: translateX(28px); }
+        #sidebar.sidebar-peek {
+            width: 70px !important;
+            min-width: 70px;
+            max-width: 70px;
+        }
+        #sidebar.sidebar-open {
+            width: 260px !important;
+            min-width: 260px;
+            max-width: 260px;
+        }
+        #sidebarEditToggleArea {
+            margin-bottom: 32px;
+            padding-left: 14px;
+            padding-right: 14px;
+        }
+        #sidebarDetails {
+            flex: 1;
+            padding-left: 14px;
+            padding-right: 14px;
+        }
     </style>
 </head>
 <body>
@@ -271,7 +291,7 @@
         -->
         
         <!-- ハンバーガーメニュー -->
-        <div id="hamburger" style="position:fixed;top:24px;left:24px;z-index:4000;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:rgba(44,44,44,0.95);border-radius:8px;box-shadow:0 2px 8px #000;flex-direction:column;gap:4px;">
+        <div id="hamburger" style="position:fixed;top:14px;left:14px;z-index:4000;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:rgba(44,44,44,0.95);border-radius:8px;box-shadow:0 2px 8px #000;flex-direction:column;gap:4px;">
             <div style="width:28px;height:4px;background:#fff;border-radius:2px;"></div>
             <div style="width:28px;height:4px;background:#fff;border-radius:2px;"></div>
             <div style="width:28px;height:4px;background:#fff;border-radius:2px;"></div>
@@ -281,18 +301,9 @@
         <div id="sidebarOverlay" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.18);z-index:2999;"></div>
 
         <!-- サイドバー -->
-        <div id="sidebar" style="position:fixed;top:0;left:-280px;width:260px;height:100vh;background:#232b2b;z-index:3000;box-shadow:2px 0 16px #000;transition:left 0.3s;display:flex;flex-direction:column;padding:64px 14px 18px 18px;">
-            <div style="margin-bottom:32px;">
-                <label style="color:#fff;font-size:17px;display:flex;align-items:center;gap:16px;margin-top:24px; margin-left:14px;">
-                    編集モード
-                    <span style="flex:1;"></span>
-                    <label class="switch" style="margin-right:16px;">
-                      <input type="checkbox" id="editModeToggle">
-                      <span class="slider round"></span>
-                    </label>
-                </label>
-            </div>
-            <button id="closeSidebarBtn" class="btn" style="margin-top:auto;background:#444;">閉じる</button>
+        <div id="sidebar" class="sidebar-peek" style="position:fixed;top:0;left:0;width:90px;height:100vh;background:#232b2b;z-index:3000;box-shadow:2px 0 16px #000;transition:width 0.3s;display:flex;flex-direction:column;padding:64px 0 18px 0;overflow:hidden;">
+            <div id="sidebarEditToggleArea"></div>
+            <div id="sidebarDetails" style="display:none;"></div>
         </div>
         
         <div style="margin-bottom: 18px; display: flex; align-items: center; gap: 10px;" id="mapSettingsArea">
@@ -471,8 +482,13 @@
       // 原点をFirestoreに保存
       async function saveOriginToFirestore(x, y) {
         try {
-          await setDoc(doc(db, 'settings', 'origin'), { originPxX: x, originPxY: y });
-          console.log('Origin saved to Firestore:', x, y);
+          // 画像サイズに対する割合で保存
+          const imgW = mapImage.clientWidth;
+          const imgH = mapImage.clientHeight;
+          const originRatioX = x / imgW;
+          const originRatioY = y / imgH;
+          await setDoc(doc(db, 'settings', 'origin'), { originRatioX, originRatioY });
+          console.log('Origin saved to Firestore (ratio):', originRatioX, originRatioY);
         } catch (e) {
           console.error('Firestore save error:', e);
           throw e;
@@ -967,7 +983,12 @@
       window.addEventListener('DOMContentLoaded', async () => {
           // Firestoreから原点を取得してセット
           const origin = await loadOriginFromFirebase();
-          if (origin) {
+          if (origin && origin.originRatioX !== undefined && origin.originRatioY !== undefined) {
+              // 画像サイズに合わせてピクセル値を再計算
+              originPxX = origin.originRatioX * mapImage.clientWidth;
+              originPxY = origin.originRatioY * mapImage.clientHeight;
+          } else if (origin && origin.originPxX !== undefined && origin.originPxY !== undefined) {
+              // 旧データ互換: ピクセル値が保存されていた場合
               originPxX = origin.originPxX;
               originPxY = origin.originPxY;
           }
@@ -986,6 +1007,24 @@
           // ウィンドウリサイズ時にマーカー再配置
           window.addEventListener('resize', updateAllMarkerPositions);
           mapImage.addEventListener('load', updateAllMarkerPositions);
+
+          // ウィンドウリサイズ時に原点も再計算
+          window.addEventListener('resize', async () => {
+            const origin = await loadOriginFromFirebase();
+            if (origin && origin.originRatioX !== undefined && origin.originRatioY !== undefined) {
+              originPxX = origin.originRatioX * mapImage.clientWidth;
+              originPxY = origin.originRatioY * mapImage.clientHeight;
+              updateAllMarkerPositions();
+            }
+          });
+          mapImage.addEventListener('load', async () => {
+            const origin = await loadOriginFromFirebase();
+            if (origin && origin.originRatioX !== undefined && origin.originRatioY !== undefined) {
+              originPxX = origin.originRatioX * mapImage.clientWidth;
+              originPxY = origin.originRatioY * mapImage.clientHeight;
+              updateAllMarkerPositions();
+            }
+          });
       });
 
       // マップ画像アップロード
@@ -1006,7 +1045,7 @@
       window.renderAllMarkers = renderAllMarkers;
 
       // 編集モード管理
-      const EDIT_PASSWORD = 'creeper is fine'; // ←ここを好きなパスワードに変更
+      const EDIT_PASSWORD = '0214'; // ←ここを好きなパスワードに変更
       let isEditMode = false;
       function setEditMode(flag) {
         isEditMode = flag;
@@ -1019,51 +1058,119 @@
       // サイドバー・ハンバーガー・編集トグルの初期化
       document.addEventListener('DOMContentLoaded', () => {
         setEditMode(false); // 初期は編集モードOFF
-        // ハンバーガークリックでサイドバー開閉トグル
+        let sidebarOpen = false;
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
+        const sidebarEditToggleArea = document.getElementById('sidebarEditToggleArea');
+        const sidebarDetails = document.getElementById('sidebarDetails');
+        // peek状態用のHTML
+        function renderSidebarPeek() {
+          sidebar.classList.remove('sidebar-open');
+          sidebar.classList.add('sidebar-peek');
+          const pencilColor = isEditMode ? '#4CAF50' : '#fff';
+          sidebarEditToggleArea.innerHTML = `
+            <div id="pencilIconArea" style="display:flex;align-items:center;justify-content:center;margin-top:24px;cursor:pointer;">
+              <svg id="pencilIcon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="${pencilColor}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+            </div>
+          `;
+          sidebarDetails.style.display = 'none';
+          // 鉛筆クリックで編集モードON/OFF
+          setTimeout(() => {
+            const pencil = document.getElementById('pencilIconArea');
+            if (pencil) {
+              pencil.onclick = () => {
+                if (!isEditMode) {
+                  const pw = prompt('編集パスワードを入力してください');
+                  if (pw === EDIT_PASSWORD) {
+                    setEditMode(true);
+                  } else {
+                    alert('パスワードが違います');
+                  }
+                } else {
+                  setEditMode(false);
+                }
+                // 色を即時反映
+                renderSidebarPeek();
+              };
+            }
+          }, 0);
+        }
+        // open状態用のHTML
+        function renderSidebarOpen() {
+          sidebar.classList.remove('sidebar-peek');
+          sidebar.classList.add('sidebar-open');
+          sidebarEditToggleArea.innerHTML = `
+            <label style="color:#fff;font-size:17px;display:flex;align-items:center;gap:16px;margin-top:24px;margin-left:15px;">
+              編集モード
+              <span style="flex:1;"></span>
+              <label class="switch" style="margin-right:16px;">
+                <input type="checkbox" id="editModeToggle">
+                <span class="slider round"></span>
+              </label>
+            </label>
+          `;
+          sidebarDetails.style.display = '';
+          sidebarDetails.innerHTML = '';
+        }
+        // 初期はpeek
+        renderSidebarPeek();
+        // ハンバーガークリックでサイドバー開閉トグル
         document.getElementById('hamburger').onclick = function() {
-          if (sidebar.style.left === '0px') {
-            sidebar.style.left = '-280px';
+          if (sidebarOpen) {
+            sidebarOpen = false;
+            renderSidebarPeek();
             overlay.style.display = 'none';
+            bindEditToggle();
           } else {
-            sidebar.style.left = '0';
+            sidebarOpen = true;
+            renderSidebarOpen();
             overlay.style.display = 'block';
+            bindEditToggle();
           }
         };
         // オーバーレイクリックでサイドバー閉じる
         overlay.onclick = function() {
-          sidebar.style.left = '-280px';
+          sidebarOpen = false;
+          renderSidebarPeek();
           overlay.style.display = 'none';
+          bindEditToggle();
         };
-        // サイドバー閉じる
-        document.getElementById('closeSidebarBtn').onclick = function() {
-          sidebar.style.left = '-280px';
-          overlay.style.display = 'none';
-        };
-        // 編集モードトグル
-        const toggle = document.getElementById('editModeToggle');
-        let ignoreToggleEvent = false;
-        toggle.addEventListener('change', async function(e) {
-          if (ignoreToggleEvent) return;
-          if (toggle.checked) {
-            // ONにする時だけパスワード
-            const pw = prompt('編集パスワードを入力してください');
-            if (pw === EDIT_PASSWORD) {
-              setEditMode(true);
+        // 編集トグルのイベント再バインド
+        function bindEditToggle() {
+          const toggle = document.getElementById('editModeToggle');
+          let ignoreToggleEvent = false;
+          if (!toggle) return;
+          toggle.checked = isEditMode;
+          toggle.addEventListener('change', async function(e) {
+            if (ignoreToggleEvent) return;
+            if (toggle.checked) {
+              const pw = prompt('編集パスワードを入力してください');
+              if (pw === EDIT_PASSWORD) {
+                setEditMode(true);
+              } else {
+                alert('パスワードが違います');
+                ignoreToggleEvent = true;
+                toggle.checked = false;
+                setTimeout(()=>{ignoreToggleEvent=false;},100);
+              }
             } else {
-              alert('パスワードが違います');
-              ignoreToggleEvent = true;
-              toggle.checked = false;
-              setTimeout(()=>{ignoreToggleEvent=false;},100);
+              setEditMode(false);
             }
-          } else {
-            setEditMode(false);
+          });
+        }
+        bindEditToggle();
+        // ショートカットキー E で編集モードON/OFF
+        document.addEventListener('keydown', function(e) {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (e.key === 'e' || e.key === 'E') {
+            const toggle = document.getElementById('editModeToggle');
+            if (toggle) {
+              toggle.checked = !toggle.checked;
+              toggle.dispatchEvent(new Event('change'));
+            }
+            e.preventDefault();
           }
         });
-        // モーダルの❌ボタンにイベントを明示的にバインド
-        const closeBtn = document.querySelector('.modal .close');
-        if (closeBtn) closeBtn.addEventListener('click', closeModal);
       });
       // 編集モードでない場合、編集系ダイアログやボタンを無効化
       function requireEditMode() {

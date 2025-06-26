@@ -244,6 +244,12 @@
             background: #ff4444 !important;
             color: #fff !important;
         }
+        .switch { position: relative; display: inline-block; width: 48px; height: 28px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 28px; }
+        .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow:0 2px 6px #0002; }
+        input:checked + .slider { background-color: #4CAF50; }
+        input:checked + .slider:before { transform: translateX(20px); }
     </style>
 </head>
 <body>
@@ -264,12 +270,30 @@
         </div>
         -->
         
-        <!-- 編集パスワードUI -->
-        <div id="editPasswordArea" style="margin-bottom:18px;display:flex;align-items:center;gap:10px;">
-            <input type="password" id="editPasswordInput" placeholder="編集パスワード" style="padding:6px 12px;border-radius:5px;border:1px solid #888;font-size:15px;">
-            <button class="btn" id="editModeBtn">編集モードに入る</button>
-            <span id="editModeStatus" style="color:#4CAF50;font-weight:bold;margin-left:10px;display:none;">編集モード中</span>
-            <button class="btn" id="exitEditModeBtn" style="display:none;background:#ff4444;">編集モード終了</button>
+        <!-- ハンバーガーメニュー -->
+        <div id="hamburger" style="position:fixed;top:24px;left:24px;z-index:4000;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:rgba(44,44,44,0.95);border-radius:8px;box-shadow:0 2px 8px #000;flex-direction:column;gap:4px;">
+            <div style="width:28px;height:4px;background:#fff;border-radius:2px;"></div>
+            <div style="width:28px;height:4px;background:#fff;border-radius:2px;"></div>
+            <div style="width:28px;height:4px;background:#fff;border-radius:2px;"></div>
+        </div>
+
+        <!-- サイドバーオーバーレイ -->
+        <div id="sidebarOverlay" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.18);z-index:2999;"></div>
+
+        <!-- サイドバー -->
+        <div id="sidebar" style="position:fixed;top:0;left:-280px;width:260px;height:100vh;background:#232b2b;z-index:3000;box-shadow:2px 0 16px #000;transition:left 0.3s;display:flex;flex-direction:column;padding:64px 14px 18px 18px;">
+            <h2 style="color:#4CAF50;margin-bottom:16px; font-size:22px;">メニュー</h2>
+            <div style="margin-bottom:32px;">
+                <label style="color:#fff;font-size:17px;display:flex;align-items:center;gap:16px;margin-top:4px; margin-left:14px;">
+                    編集モード
+                    <span style="flex:1;"></span>
+                    <label class="switch" style="margin-right:16px;">
+                      <input type="checkbox" id="editModeToggle">
+                      <span class="slider round"></span>
+                    </label>
+                </label>
+            </div>
+            <button id="closeSidebarBtn" class="btn" style="margin-top:auto;background:#444;">閉じる</button>
         </div>
         
         <div style="margin-bottom: 18px; display: flex; align-items: center; gap: 10px;" id="mapSettingsArea">
@@ -289,7 +313,7 @@
             <button class="btn btn-marker-clear" type="button">🗑️ マーカーをクリア</button>
         </div>
         
-        <div class="map-container" id="mapContainer">
+        <div class="map-container" id="mapContainer" style="margin-top: 10px;">
             <!-- デモ用のマップ画像 - 実際の画像に置き換えてください -->
             <img src="worldmap.png" 
                  class="map-image" 
@@ -967,29 +991,60 @@
       let isEditMode = false;
       function setEditMode(flag) {
         isEditMode = flag;
-        // 編集系UIの表示/非表示
         document.getElementById('mapSettingsArea').style.display = flag ? '' : 'none';
         document.getElementById('editControlsArea').style.display = flag ? '' : 'none';
-        // 編集モード状態表示
-        document.getElementById('editModeStatus').style.display = flag ? '' : 'none';
-        document.getElementById('exitEditModeBtn').style.display = flag ? '' : 'none';
-        document.getElementById('editPasswordInput').disabled = flag;
-        document.getElementById('editModeBtn').style.display = flag ? 'none' : '';
+        // トグルスイッチの状態も同期
+        const toggle = document.getElementById('editModeToggle');
+        if (toggle) toggle.checked = flag;
       }
-      // 編集モード切り替え
+      // サイドバー・ハンバーガー・編集トグルの初期化
       document.addEventListener('DOMContentLoaded', () => {
         setEditMode(false); // 初期は編集モードOFF
-        document.getElementById('editModeBtn').onclick = function() {
-          const input = document.getElementById('editPasswordInput').value;
-          if (input === EDIT_PASSWORD) {
-            setEditMode(true);
+        // ハンバーガークリックでサイドバー開閉トグル
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        document.getElementById('hamburger').onclick = function() {
+          if (sidebar.style.left === '0px') {
+            sidebar.style.left = '-280px';
+            overlay.style.display = 'none';
           } else {
-            alert('パスワードが違います');
+            sidebar.style.left = '0';
+            overlay.style.display = 'block';
           }
         };
-        document.getElementById('exitEditModeBtn').onclick = function() {
-          setEditMode(false);
+        // オーバーレイクリックでサイドバー閉じる
+        overlay.onclick = function() {
+          sidebar.style.left = '-280px';
+          overlay.style.display = 'none';
         };
+        // サイドバー閉じる
+        document.getElementById('closeSidebarBtn').onclick = function() {
+          sidebar.style.left = '-280px';
+          overlay.style.display = 'none';
+        };
+        // 編集モードトグル
+        const toggle = document.getElementById('editModeToggle');
+        let ignoreToggleEvent = false;
+        toggle.addEventListener('change', async function(e) {
+          if (ignoreToggleEvent) return;
+          if (toggle.checked) {
+            // ONにする時だけパスワード
+            const pw = prompt('編集パスワードを入力してください');
+            if (pw === EDIT_PASSWORD) {
+              setEditMode(true);
+            } else {
+              alert('パスワードが違います');
+              ignoreToggleEvent = true;
+              toggle.checked = false;
+              setTimeout(()=>{ignoreToggleEvent=false;},100);
+            }
+          } else {
+            setEditMode(false);
+          }
+        });
+        // モーダルの❌ボタンにイベントを明示的にバインド
+        const closeBtn = document.querySelector('.modal .close');
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
       });
       // 編集モードでない場合、編集系ダイアログやボタンを無効化
       function requireEditMode() {
